@@ -13,11 +13,11 @@ int main(){
 
     // constructing an adress to a server, this is the client side code
     struct sockaddr_in address;
-    char* ip = "74.125.136.138";
+    char* ip = "127.0.0.1";
 
     // port number is an usigned short (2 byte number)
     // because the network protocol expect the Big endian version of the bytes we use the htons function to put the bytes in the right order
-    address.sin_port = htons(80);
+    address.sin_port = htons(2000);
     address.sin_family = AF_INET;
 
     // function that will take an ipv4 addr (INET), an ipv4 address in a char* form, and the pointer to an address struct

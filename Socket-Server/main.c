@@ -14,17 +14,13 @@ int main(){
 
     // constructing an serverAddress for the server 
     struct sockaddr_in serverAddress;
-    char* ip = INADDR_ANY;
 
-    // using port 2000
+    // using port 2000, and all available network interface using INADDR_ANY (local host, wifi, ethernet, etc.)
     serverAddress.sin_port = htons(2000);
     serverAddress.sin_family = AF_INET;
+    serverAddress.sin_addr.s_addr = INADDR_ANY;
 
-    // function that will take an ipv4 addr (INET), an ipv4 serverAddress in a char* form, and the pointer to an serverAddress struct
-    // will create the uint version of the ip serverAddress to use as the field in the serverAddress struct (needed to make the connection)
-    inet_pton(AF_INET, ip, &serverAddress.sin_addr.s_addr);
-
-    // bind this program to the serverAddress
+    // bind this file descripter to the serverAddress (operating system will now know that this file descriptor is a server)
      int result = bind(serverSocketFD, (struct sockaddr*) &serverAddress, sizeof(serverAddress));
      if (result == 0)   
      {
@@ -36,8 +32,14 @@ int main(){
   
      // the accept function must have the client address (which we initilize below) and the pointer to the size of the client address
      struct sockaddr_in clientAddress;     
-     int clientAddressSize = sizeof (struct sockaddr_in) ;
+     socklen_t clientAddressSize = sizeof (struct sockaddr_in);
 
      // returns the file descriptor of the connecting client, does this for each connecting socket. 
-     int clientSocketFD = accept(serverSocketFD, &clientAddress, &clientAddressSize); 
+     int clientSocketFD = accept(serverSocketFD, (struct sockaddr*) &clientAddress, &clientAddressSize); 
+
+     // create a buffer to recieve information from the client and print it
+     char buffer[1024];
+     recv(clientSocketFD, buffer, 1024, 0);
+      
+     printf("Response was %s\n", buffer);
 }
