@@ -3,7 +3,8 @@
 #include <netinet/in.h>    
 #include <arpa/inet.h>
 #include <string.h>
-
+#include <stdbool.h>
+# include <unistd.h>
 
 int main(){
 
@@ -39,7 +40,38 @@ int main(){
 
      // create a buffer to recieve information from the client and print it
      char buffer[1024];
-     recv(clientSocketFD, buffer, 1024, 0);
+     while (true){
+        // Start infinite loop to continuously listen for client messages
+        
+        ssize_t amountReceived = recv(clientSocketFD, buffer, 1024, 0);
+        // recv() reads raw bytes from the client connection
+        // Returns: number of bytes received, 0 if client closed, -1 if error
+        // Important: recv() does NOT automatically null-terminate the data
+        
+        if(amountReceived > 0)
+        // Check if we successfully received some data
+        {
+            buffer[amountReceived] = 0;
+            // This adds a null terminator ('\0') after the received data
+     
+            
+            printf("Response was %s", buffer);
+        }
+        
+        if (amountReceived <= 0)
+        // Check for network errors (connection lost, socket error, etc.)
+        {
+            break;  
+        }
+    }
+    
+    close(clientSocketFD);
+    // Close this client's connection - frees up the file descriptor
+    
+    shutdown(serverSocketFD, SHUT_RDWR);
+    // Gracefully shutdown the main server listening socket
+    // SHUT_RDWR = shutdown both read and write operations
+    // More polite than close() - gives network time to clean up
       
      printf("Response was %s\n", buffer);
 }
