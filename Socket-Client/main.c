@@ -6,6 +6,10 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <pthread.h>
+
+void startListeningAndPrintMessagesOnNewThread(int socketFD);
+void* listenAndPrint(void* args);
 
 int main(){
 
@@ -51,6 +55,11 @@ int main(){
     printf("Type and we will send... (type 'q' to quit)\n");
     // Prints instructions to the user on the screen
 
+
+    // function that will create another thread that is listening to incoming messages and will print them
+    // must be on another thread because we are blockign for sending messages.
+    startListeningAndPrintMessagesOnNewThread(socketFD);
+
     while (true)
     // Starts an infinite loop that will run until we explicitly break out
     // 'true' means this condition is always satisfied
@@ -88,7 +97,47 @@ int main(){
         }
     }
 
+    // only close the socket in the main function
     close(socketFD);    
 
     return 0; 
+}
+
+void startListeningAndPrintMessagesOnNewThread(int socketFD)
+{
+    pthread_t id;
+    pthread_create(&id, NULL, listenAndPrint, (void*)(intptr_t) socketFD); 
+ 
+}
+
+void* listenAndPrint(void* args){
+    // cast arg back to int
+    int socketFD = (int)(intptr_t)args;
+
+    // create a buffer to receive information from the client and print it
+    char buffer[1024];
+    while (true)
+    {
+        // Start infinite loop to continuously listen for client messages
+        
+        ssize_t amountReceived = recv(socketFD, buffer, 1024, 0);
+        // recv() reads raw bytes from the client connection
+        // Returns: number of bytes received, 0 if client closed, -1 if error
+        // Important: recv() does NOT automatically null-terminate the data
+        
+        if(amountReceived > 0)
+        // Check if we successfully received some data
+        {
+            buffer[amountReceived] = 0;
+            // This adds a null terminator ('\0') after the received data
+            printf("Message to everyone is: %s", buffer);
+        }
+        
+        if (amountReceived == 0)
+        // Check for client closed (the close function in the client will send a tcp data with this 0 vlaue)
+        {
+            break;  
+        }
+    }   
+    return NULL;
 }

@@ -16,10 +16,14 @@ struct AcceptedSocket
  bool accpetedSuccessfully;   
 };
 
+struct AcceptedSocket acceptedSockets[10];
+int acceptedSocketsCount = 0;
+
 struct AcceptedSocket* acceptIncomingConnection(int serverSocketFD);  
 void* receiveAndPrintIncomingData(void* socketFD);
 void startAcceptingIncomingConnections(int serverSocketFD);
 void receiveAndPrintIncomingDataOnSeperateThread(struct AcceptedSocket* pSocket);
+void sendAndReceivedMessageToOtherClients(char* buffer, struct AcceptedSocket* pSocket);
 
 int main(){
 
@@ -68,6 +72,8 @@ void startAcceptingIncomingConnections(int serverSocketFD)
     while (true) 
      {
          struct AcceptedSocket* clientSocketFD = acceptIncomingConnection(serverSocketFD);
+         // store the accepted client into the array (max 10 connections)
+         acceptedSockets[acceptedSocketsCount++] = *clientSocketFD;
          receiveAndPrintIncomingDataOnSeperateThread(clientSocketFD);
 
      }
@@ -103,9 +109,9 @@ void* receiveAndPrintIncomingData(void* arg)
         {
             buffer[amountReceived] = 0;
             // This adds a null terminator ('\0') after the received data
-            
-            
-            printf("Response was %s", buffer);
+            printf("Server Response was: %s", buffer);
+
+            sendAndReceivedMessageToOtherClients(buffer, pSocket);
         }
         
         if (amountReceived == 0)
@@ -119,6 +125,19 @@ void* receiveAndPrintIncomingData(void* arg)
      // free the accepted client struct
      free(pSocket);
      return NULL;
+}
+
+// send the received message from one client to all other clients 
+// we send to clients that have a different file descriptor number than the one received
+void sendAndReceivedMessageToOtherClients(char* buffer, struct AcceptedSocket* pSocket)
+{
+    for(int i = 0; i < acceptedSocketsCount; i++)
+    {
+        if (acceptedSockets[i].accpetedSocketFD != pSocket->accpetedSocketFD)
+        {
+            send(acceptedSockets[i].accpetedSocketFD, buffer, strlen(buffer), 0); 
+        }
+    }
 }
 
 // since we are going to accept multiple clients to the same socket, wrap the accept function to make it cleaner and add extra functionality
