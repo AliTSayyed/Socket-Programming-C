@@ -4,7 +4,22 @@
 #include <arpa/inet.h>
 #include <string.h>
 #include <stdbool.h>
-# include <unistd.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <pthread.h>
+
+struct AcceptedSocket 
+{
+ int accpetedSocketFD;
+ struct sockaddr_in address;
+ int error;
+ bool accpetedSuccessfully;   
+};
+
+struct AcceptedSocket* acceptIncomingConnection(int serverSocketFD);  
+void* receiveAndPrintIncomingData(void* socketFD);
+void startAcceptingIncomingConnections(int serverSocketFD);
+void receiveAndPrintIncomingDataOnSeperateThread(struct AcceptedSocket* pSocket);
 
 int main(){
 
@@ -35,15 +50,50 @@ int main(){
      struct sockaddr_in clientAddress;     
      socklen_t clientAddressSize = sizeof (struct sockaddr_in);
 
-     // returns the file descriptor of the connecting client, does this for each connecting socket. 
-     int clientSocketFD = accept(serverSocketFD, (struct sockaddr*) &clientAddress, &clientAddressSize); 
+     // wrapper function that will create a new thread per client connection 
+     startAcceptingIncomingConnections(serverSocketFD);
+    
+     shutdown(serverSocketFD, SHUT_RDWR);
+     // Gracefully shutdown the main server listening socket
+     // SHUT_RDWR = shutdown both read and write operations
+     // More polite than close() - gives network time to clean up
+    
+     return 0;
+}
 
-     // create a buffer to recieve information from the client and print it
-     char buffer[1024];
-     while (true){
+// Accepts and creates a new client socket file descriptor for incoming connections
+void startAcceptingIncomingConnections(int serverSocketFD)
+{
+    // this while true loop keeps the function 'alive' in the stack
+    while (true) 
+     {
+         struct AcceptedSocket* clientSocketFD = acceptIncomingConnection(serverSocketFD);
+         receiveAndPrintIncomingDataOnSeperateThread(clientSocketFD);
+
+     }
+     
+}
+
+// we must create a new thread for each client to print the data from their client socket fd
+void receiveAndPrintIncomingDataOnSeperateThread(struct AcceptedSocket* pSocket)
+{
+    pthread_t id;
+    // function to create a new thread (must type cast void*)
+    pthread_create(&id, NULL, receiveAndPrintIncomingData,(void*)pSocket);
+}
+
+void* receiveAndPrintIncomingData(void* arg)
+{
+     // Cast back to get the original struct pointer
+     struct AcceptedSocket* pSocket = (struct AcceptedSocket*)arg;
+     int socketFD = pSocket->accpetedSocketFD;
+
+    // create a buffer to receive information from the client and print it
+    char buffer[1024];
+    while (true){
         // Start infinite loop to continuously listen for client messages
         
-        ssize_t amountReceived = recv(clientSocketFD, buffer, 1024, 0);
+        ssize_t amountReceived = recv(socketFD, buffer, 1024, 0);
         // recv() reads raw bytes from the client connection
         // Returns: number of bytes received, 0 if client closed, -1 if error
         // Important: recv() does NOT automatically null-terminate the data
@@ -53,25 +103,41 @@ int main(){
         {
             buffer[amountReceived] = 0;
             // This adds a null terminator ('\0') after the received data
-     
+            
             
             printf("Response was %s", buffer);
         }
         
-        if (amountReceived <= 0)
-        // Check for network errors (connection lost, socket error, etc.)
+        if (amountReceived == 0)
+        // Check for client closed (the close function in the client will send a tcp data with this 0 vlaue)
         {
             break;  
         }
-    }
-    
-    close(clientSocketFD);
-    // Close this client's connection - frees up the file descriptor
-    
-    shutdown(serverSocketFD, SHUT_RDWR);
-    // Gracefully shutdown the main server listening socket
-    // SHUT_RDWR = shutdown both read and write operations
-    // More polite than close() - gives network time to clean up
-      
-     printf("Response was %s\n", buffer);
+      }   
+     // close the connection once client disconnects
+     close(socketFD);
+     // free the accepted client struct
+     free(pSocket);
+     return NULL;
+}
+
+// since we are going to accept multiple clients to the same socket, wrap the accept function to make it cleaner and add extra functionality
+struct AcceptedSocket* acceptIncomingConnection(int serverSocketFD)
+{
+     struct sockaddr_in clientAddress;
+    socklen_t clientAddressSize = sizeof(struct sockaddr_in);   
+     int clientSocketFD = accept(serverSocketFD, (struct sockaddr*) &clientAddress, &clientAddressSize); 
+
+     struct AcceptedSocket* acceptedSocket = malloc(sizeof(struct AcceptedSocket));
+
+     acceptedSocket->address = clientAddress;
+     acceptedSocket->accpetedSocketFD = clientSocketFD;
+     acceptedSocket->accpetedSuccessfully = clientSocketFD > 0;
+
+     if (!acceptedSocket->accpetedSuccessfully)
+     {
+        acceptedSocket->error = clientSocketFD;
+     }
+     return acceptedSocket;
+
 }
